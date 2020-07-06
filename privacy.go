@@ -78,8 +78,8 @@ func main() {
 	m := OneTimePad(c, &eps[0], unlock)
 	// m := ShardDecrypt(c, &eps[0], unlock)
 	fmt.Println("Plaintext:\n", m)
-	EncryptFile("test.txt", "out.txt", &eps[0], t)
-	EncryptFile("out.txt", "dec.txt", &eps[0], unlock)
+	EncryptFile("test.txt", "out.txt", eps[:], t)
+	EncryptFile("out.txt", "dec.txt", eps[:], unlock)
 }
 
 //modify this random generation with a true random
@@ -149,7 +149,7 @@ func HashAte(eps *BN254.ECP, token *BN254.ECP2) []byte {
 //used for both encryption and decryption
 func OneTimePad(data []byte, eps *BN254.ECP, token *BN254.ECP2) []byte {
 	h := HashAte(eps, token)
-	res := myXor(data, h[:]) //handle error
+	res := TruncXor(data, h[:]) //handle error
 	return res
 }
 
