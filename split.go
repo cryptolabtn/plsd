@@ -69,15 +69,15 @@ func splitfile(pathToFile string) {
 				return
 			}
 			// write file on disk
-			part_name := file.Name() + ".pt" + strconv.Itoa(i)
-			_, error := os.Create(part_name)
+			partName := file.Name() + ".pt" + strconv.Itoa(i)
+			_, error := os.Create(partName)
 
 			if error != nil {
 				fmt.Println(err)
 				return
 			}
 			// write/save buffer to disk
-			ioutil.WriteFile(part_name, buffer, os.ModeAppend)
+			ioutil.WriteFile(partName, buffer, os.ModeAppend)
 
 			// fmt.Println("bytes read, string(bytestream): ", bytesread)
 			// fmt.Println("bytestream to string: ", string(buffer))
