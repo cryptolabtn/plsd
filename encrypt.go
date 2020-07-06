@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
 	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 )
@@ -16,9 +15,9 @@ type shard struct {
 }
 
 //ReadChunks read filename splitting it in chunks
-//each chunk is ShardSize (global const) bytes long
+//each chunk is size bytes long
 //and fed to output channel for concurrent processing
-func readChunks(filename string, output chan shard) {
+func readChunks(filename string, output chan shard, size int) {
 	//close channel on exit to signal end of input operations
 	defer close(output)
 	//open filename
@@ -36,7 +35,7 @@ func readChunks(filename string, output chan shard) {
 
 	//buffered reading
 	reader := bufio.NewReader(file)
-	buffer := make([]byte, ShardSize)
+	buffer := make([]byte, size)
 	for i := 0; ; i++ {
 		n, err := reader.Read(buffer)
 		if err != nil {
@@ -69,21 +68,18 @@ func TruncXor(a, b []byte) []byte {
 }
 
 //encrypt concurrently encrypt each chunk
-func encrypt(inputs chan shard, results chan shard, wg *sync.WaitGroup, eps []BN254.ECP, key *BN254.ECP2) {
-	for pt := range inputs {
-		//encrypt using appropriate shard
-		ct := OneTimePad([]byte(pt.value), &eps[pt.index], key)
-		//feed result to output channel
-		results <- shard{pt.index, string(ct)}
-	}
-	wg.Done()
+func encrypt(pt shard, eps []BN254.ECP, key *BN254.ECP2) shard {
+	//encrypt using appropriate shard
+	ct := OneTimePad([]byte(pt.value), &eps[pt.index], key)
+	//feed result to output channel
+	return shard{pt.index, string(ct)}
 }
 
 //WriteEncryption collect results of concurrent encryption and write on file
 //filename path of output file
 //results channel that feeds the results to collect
 //done channel to signal completion: true for success, false for failure
-func writeEncryption(results chan shard, filename string, done chan bool) {
+func writeResults(results chan shard, filename string, done chan bool) {
 	//collect results with a map
 	result := make(map[int]string)
 	for ct := range results {
@@ -135,27 +131,8 @@ func EncryptFile(cleartextFile, ciphertextFile string, eps []BN254.ECP, key *BN2
 		fmt.Println("File too big!")
 		return
 	}
-	//channels for feeding plaintexts and ciphertexts to the routines
-	readChannel := make(chan shard, numShards)
-	encryptChannel := make(chan shard, numShards)
-	//read file
-	go readChunks(cleartextFile, readChannel)
-
-	//concurrently encrypt each shard
-	var wg sync.WaitGroup
-	for i := 0; i < numShards; i++ {
-		wg.Add(1)
-		go encrypt(readChannel, encryptChannel, &wg, eps, key)
+	encr := func(inp shard) shard {
+		return encrypt(inp, eps, key)
 	}
-	//collect results and write them on file
-	writingSuccessful := make(chan bool)
-	go writeEncryption(encryptChannel, ciphertextFile, writingSuccessful)
-	//wait for every encryption to finish
-	wg.Wait()
-	//signal end of encryption to finalise result collection and writing
-	close(encryptChannel)
-	//wait for writing completion
-	if <-writingSuccessful {
-		fmt.Println("encryption written successfully!")
-	}
+	ProcessFile(cleartextFile, ciphertextFile, encr, numShards, ShardSize)
 }

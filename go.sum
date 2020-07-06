@@ -44,6 +44,8 @@ github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4/go.mod h1:ybxpYRF
 github.com/aliyun/alibaba-cloud-sdk-go v0.0.0-20190412020505-60e2075261b6/go.mod h1:T9M45xf79ahXVelWoOBmH0y4aC1t5kXO5BxwyakgIGA=
 github.com/aliyun/alibaba-cloud-sdk-go v0.0.0-20190620160927-9418d7b0cd0f/go.mod h1:myCDvQSzCW+wB1WAlocEru4wMGJxy+vlxHdhegi1CDQ=
 github.com/aliyun/aliyun-oss-go-sdk v0.0.0-20190307165228-86c17b95fcd5/go.mod h1:T/Aws4fEfogEE9v+HPhhw+CntffsBHJ8nXQCwKr0/g8=
+github.com/amitbet/gorename v0.0.0-20190107054843-300b577db37e h1:tIK4cl/Sv+RNaNars15HJy1ry6srE9bwZmQYFzul7zA=
+github.com/amitbet/gorename v0.0.0-20190107054843-300b577db37e/go.mod h1:CpEpf/sYrXvXeBo9OjMfWgKOT9Zeqjp7QE4UtaA4kmM=
 github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
 github.com/apple/foundationdb/bindings/go v0.0.0-20190411004307-cd5c9d91fad2/go.mod h1:OMVSB21p9+xQUIqlGizHPZfjK+SHws1ht+ZytVDoz9U=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
@@ -564,6 +566,7 @@ golang.org/x/tools v0.0.0-20190328211700-ab21143f2384/go.mod h1:LCzVGOaR6xXOjkQ3
 golang.org/x/tools v0.0.0-20190425150028-36563e24a262/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190506145303-2d16b83fe98c/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190524140312-2c0ae7006135/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
+golang.org/x/tools v0.0.0-20190718200317-82a3ea8a504c h1:/w2shrE71LqqE7724PI+5iMYc5YbPnUaRosCQncZ/Nk=
 golang.org/x/tools v0.0.0-20190718200317-82a3ea8a504c/go.mod h1:jcCCGcm9btYwXyDqrUWc6MKQKKGJCWEQ3AfLSRIbEuI=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 google.golang.org/api v0.0.0-20181220000619-583d854617af/go.mod h1:4mhQ8q/RsB7i+udVvVy5NUi08OU8ZlA0gRVgrF7VFY0=

@@ -86,3 +86,65 @@ func splitfile(pathToFile string) {
 
 	wg.Wait()
 }
+
+//GenFunc generic function on interfaces
+type GenFunc func(input interface{}) interface{}
+
+//ConcurrentWorker execute job concurrently
+//inp input for the worker
+//worker function that executes the job
+//output channel to feed back the results
+func ConcurrentWorker(inp interface{}, worker GenFunc, output chan interface{}, wg *sync.WaitGroup) {
+	output <- worker(inp)
+	wg.Done()
+}
+
+//CollectWork collect output of concurrent workers
+//input channel that feeds the results
+func CollectWork(input chan interface{}, collect GenFunc, done chan bool) {
+	i := 0
+	for shard := range input {
+		fmt.Println(shard)
+		i++
+	}
+	done <- true
+}
+
+//ProcessFile read file and process it concurrently
+//then collect results and write on file
+//inputFile path to input file
+//outputFile path to output file
+//process function that processes each chunk
+//num number of chunks to process concurrently
+//size size of chunks to process
+func ProcessFile(inputFile, outputFile string, process func(shard) shard, num, size int) {
+	//channels for feeding plaintexts and ciphertexts to the routines
+	readChannel := make(chan shard, num)
+	resultChannel := make(chan shard, num)
+	//read file
+	go readChunks(inputFile, readChannel, size)
+
+	//concurrently encrypt each shard
+	var wg sync.WaitGroup
+	for i := 0; i < num; i++ {
+		wg.Add(1)
+		go func() {
+			for read := range readChannel {
+				//process and feed result to output channel
+				resultChannel <- process(read)
+			}
+			wg.Done()
+		}()
+	}
+	//collect results and write them on file
+	writingSuccessful := make(chan bool)
+	go writeResults(resultChannel, outputFile, writingSuccessful)
+	//wait for every encryption to finish
+	wg.Wait()
+	//signal end of encryption to finalise result collection and writing
+	close(resultChannel)
+	//wait for writing completion
+	if <-writingSuccessful {
+		fmt.Println("file written successfully!")
+	}
+}

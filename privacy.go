@@ -1,9 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
-	"time"
+	"sync"
 
 	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 	"golang.org/x/crypto/sha3"
@@ -20,8 +20,12 @@ const ShardSize = 64
 //MaxShards maximum number of shards
 const MaxShards = 10
 
-var mod *BN254.BIG = BN254.NewBIGints(BN254.Modulus)       //modulus
-var order *BN254.BIG = BN254.NewBIGints(BN254.CURVE_Order) //order
+//MOD modulus of curve BN254
+var MOD *BN254.BIG = BN254.NewBIGints(BN254.Modulus)
+
+//ORDER order of curve BN254
+var ORDER *BN254.BIG = BN254.NewBIGints(BN254.CURVE_Order)
+
 //B1 G1 generator
 var B1 *BN254.ECP = BN254.ECP_generator()
 
@@ -35,94 +39,127 @@ func main() {
 	fmt.Println("Private Ledger: Welcome!")
 
 	/* try this if you want to test */
-	//number of block
-	const BLOCKNUM = 10
-	//generate u
-	var u [BLOCKNUM]BN254.BIG
-	temp := []int{57263860497805553, 58260159264966455, 46818232996227961,
-		2760510972643679, 14189843376587853, 63718175164549167,
-		49812870265570060, 42530229109475574, 19855063947903198,
-		44752620663305274}
-	for i := 0; i < BLOCKNUM; i++ {
-		u[i] = *BN254.NewBIGint(temp[i])
-	}
-	//generate s_0
-	s := BN254.NewBIGint(52010173955080549)
-	//initialize void vecotr eps and random exponents u
-	var eps [BLOCKNUM]BN254.ECP
-	//generate masking shards using random time-key s
-	MaskingShards(s, u[:], eps[:])
-	//generate a "random" message (questa libreria per random fa abbastanza ridere ;))
-	message := make([]byte, 64)
-	rand.Read(message)
-	fmt.Println("Message:\n", message)
-	//generate public/private key
-	mu := BN254.NewBIGint(986789921)
-	v := BN254.NewBIGint(3455621)
-	//generate random exponent
-	k := BN254.NewBIGint(321231)
-	//compute public key
-	ql := BN254.G2mul(B2, mu)
-	//compute encryption token time 0
-	token := TokenGen(ql, s)
-	//multply token by k
-	t := BN254.G2mul(token, k)
-	// c := ShardEncrypt(message[:], *k, &eps[0], token)
-	c := OneTimePad(message, &eps[0], t)
-	fmt.Println("Ciphertext:\n", c)
-	//compute the encapsulated key multiplying the token by vl/ul and then by k
-	keyEnc := KeyUpdate(token, mu, v)
-	keyEnc = BN254.G2mul(keyEnc, k)
-	//compute unlocked key for decryption multiplying the previous key by ul/vl
-	unlock := KeyUpdate(keyEnc, v, mu)
-	m := OneTimePad(c, &eps[0], unlock)
-	// m := ShardDecrypt(c, &eps[0], unlock)
-	fmt.Println("Plaintext:\n", m)
-	EncryptFile("test.txt", "out.txt", eps[:], t)
+	//generate shards and get time-key
+	s := InitUpdLedger("shards.enc")
+	//read masking shards from file
+	eps := GetShards("shards.enc", MaxShards)
+
+	//generate user keys
+	u := GenUser()
+	//compute encryption token
+	token := TokenGen(u.PublicKey, s)
+	//generate encryption key
+	key := BN254.G2mul(token, GenExp())
+	//compute the encapsulated key
+	keyEnc := u.EncapsulateKey(key)
+	//save encapsulated key on the ledger
+	keyIndex := AppendEncapsulatedKeys("keys.enc", keyEnc)
+	//encrypt file
+	EncryptFile("test.txt", "out.txt", eps[:], key)
+	//unlock key from the ledger
+	unlock := u.UnlockKey(GetEncKey("keys.enc", keyIndex))
+	//decrypt file
 	EncryptFile("out.txt", "dec.txt", eps[:], unlock)
+	//update ledger
+	sNew := UpdateLedger("keys.enc", "shards.enc", s)
+	//compare time keys
+	fmt.Println(s.ToString())
+	fmt.Println(sNew.ToString())
+	//get updated encapsulated key from ledger
+	keyEncNew := GetEncKey("keys.enc", keyIndex)
+	//unlock key
+	unlockNew := u.UnlockKey(keyEncNew)
+	//get updated shards from ledger
+	epsNew := GetShards("shards.enc", MaxShards)
+	//decrypt file again
+	EncryptFile("out.txt", "dec2.txt", epsNew[:], unlockNew)
 }
 
-//modify this random generation with a true random
-//"random" u generation for testing
-//use this function to generate a vector u of BIG. You need to pass a void array in input.
-func uGen(u []BN254.BIG) {
-	for i := 0; i < len(u); i++ {
-		source := rand.NewSource(time.Now().UnixNano())
-		r := rand.New(source)
-		u[i] = *BN254.NewBIGint(r.Int())
+//goodExp check that e is in [2..ORDER -1]
+func goodExp(e *BN254.BIG) bool {
+	if BN254.Comp(e, BN254.NewBIGint(1)) > 0 {
+		return BN254.Comp(e, ORDER) < 0
 	}
+	return false
 }
 
-//MaskingShards function used to generate the masking shards: epsilon = (ui.st_0)B1
-func MaskingShards(s *BN254.BIG, u []BN254.BIG, eps []BN254.ECP) {
-	for i := 0; i < len(u); i++ {
-		temp := BN254.G1mul(B1, &u[i])
-		eps[i] = *(BN254.G1mul(temp, s))
+//GenExp generate cryptographically secure random exponent
+//result uniform in [2..ORDER - 1]
+func GenExp() *BN254.BIG {
+	entropy := make([]byte, BN254.MODBYTES)
+	r := BN254.NewBIGint(0)
+	for !goodExp(r) {
+		_, err := rand.Read(entropy)
+		if err != nil {
+			fmt.Println("Error generating random exponent:", err)
+			panic(err)
+		}
+		r = BN254.FromBytes(entropy)
 	}
-	return
+	return r
 }
 
-//ShardsUpdate this function is used to periodically updates the shards choosing a new time-key
-//st1 time-key at time t+1
-//st time-key at time t
-//esp is overridden
-func ShardsUpdate(eps []BN254.ECP, st1 *BN254.BIG, st *BN254.BIG) {
-	// var eps_up [delta]BN254.ECP
-	inv := BN254.NewBIGcopy(st)
-	inv.Invmodp(order)
+//genShard generate a shard cuncurrently
+//output channel to return results
+//s time-key
+func genShard(output chan *BN254.ECP, wg *sync.WaitGroup, s *BN254.BIG) {
+	temp := BN254.G1mul(B1, GenExp())
+	output <- BN254.G1mul(temp, s)
+	wg.Done()
+}
+
+//collectShards collect shards generated concurrently
+func collectShards(input chan *BN254.ECP, eps []BN254.ECP, done chan bool) {
+	i := 0
+	for shard := range input {
+		eps[i] = *shard
+		i++
+	}
+	done <- true
+}
+
+//maskingShardsGen function used to generate the masking shards
+func maskingShardsGen(s *BN254.BIG, eps []BN254.ECP) {
+	//concurrently generate each shard
+	var wg sync.WaitGroup
+	shardChannel := make(chan *BN254.ECP, len(eps))
 	for i := 0; i < len(eps); i++ {
-		temp := BN254.G1mul(&eps[i], st1)
-		temp = BN254.G1mul(temp, inv)
-		eps[i] = *temp
+		wg.Add(1)
+		go genShard(shardChannel, &wg, s)
 	}
-	// return eps_up
+	//collect results
+	done := make(chan bool)
+	go collectShards(shardChannel, eps, done)
+	wg.Wait()
+	close(shardChannel)
+	<-done
+}
+
+type mask struct {
+	index int
+	eps   *BN254.ECP
+}
+
+//shardUpdate concurrently update a shard
+//sNew new time-key
+//s old time-key
+//esp shard value
+//output channel where to feed the updated shard
+func shardUpdate(old mask, s, sNew *BN254.BIG) shard {
+	inv := BN254.NewBIGcopy(s)
+	inv.Invmodp(ORDER)
+	temp := BN254.G1mul(old.eps, sNew)
+	new := BN254.G1mul(temp, inv)
+	encoded := make([]byte, BN254.MODBYTES+1)
+	new.ToBytes(encoded, true)
+	return shard{old.index, string(encoded)}
 }
 
 //KeyUpdate this function is used for both update and unlock the key for decryption
 //toInv is the element to be INVERTED, num is the element at the numerator
-func KeyUpdate(token *BN254.ECP2, toInv *BN254.BIG, num *BN254.BIG) *BN254.ECP2 {
+func KeyUpdate(token *BN254.ECP2, toInv, num *BN254.BIG) *BN254.ECP2 {
 	inv := BN254.NewBIGcopy(toInv)
-	inv.Invmodp(order)
+	inv.Invmodp(ORDER)
 	tUpdate := BN254.G2mul(token, inv)
 	tUpdate = BN254.G2mul(tUpdate, num)
 	return tUpdate
@@ -131,7 +168,7 @@ func KeyUpdate(token *BN254.ECP2, toInv *BN254.BIG, num *BN254.BIG) *BN254.ECP2 
 //TokenGen this function generates the encryption token
 func TokenGen(ql *BN254.ECP2, st *BN254.BIG) *BN254.ECP2 {
 	inv := BN254.NewBIGcopy(st)
-	inv.Invmodp(order)
+	inv.Invmodp(ORDER)
 	token := BN254.G2mul(ql, inv)
 	return token
 }
@@ -140,6 +177,7 @@ func TokenGen(ql *BN254.ECP2, st *BN254.BIG) *BN254.ECP2 {
 func HashAte(eps *BN254.ECP, token *BN254.ECP2) []byte {
 	var gtB [FP12LEN]byte
 	gt := BN254.Ate(token, eps)
+	gt = BN254.Fexp(gt)
 	gt.ToBytes(gtB[:])
 	h := sha3.Sum512(gtB[:])
 	return h[:ShardSize]
@@ -163,7 +201,7 @@ func OneTimePad(data []byte, eps *BN254.ECP, token *BN254.ECP2) []byte {
 
 // func KeyEncaps(token *BN254.ECP2, k BN254.BIG, ql *BN254.ECP2, mu BN254.BIG, v BN254.BIG) *BN254.ECP2 {
 // 	inv := BN254.NewBIGcopy(&mu)
-// 	inv.Invmodp(order)
+// 	inv.Invmodp(ORDER)
 // 	temp := BN254.G2mul(token, inv)
 // 	temp = BN254.G2mul(temp, &v)
 // 	k := BN254.G2mul(token, &k)
