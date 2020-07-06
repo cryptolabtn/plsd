@@ -1,112 +1,88 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
-	"strconv"
 	"sync"
 )
 
-type chunk struct {
-	bufsize int
-	offset  int64
+type shard struct {
+	index int
+	value string
 }
 
-func splitfile(pathToFile string) {
-
-	const BufferSize = 512
-	file, err := os.Open(pathToFile)
+//ReadChunks read filename splitting it in chunks
+//each chunk is size bytes long
+//and fed to output channel for concurrent processing
+func readChunks(filename string, output chan shard, size int) {
+	//close channel on exit to signal end of input operations
+	defer close(output)
+	//open filename
+	file, err := os.Open(filename)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error opening file:", err)
 		return
 	}
-	defer file.Close()
+	//close file on exit
+	defer func() {
+		if err = file.Close(); err != nil {
+			fmt.Println("Error closing file:", err)
+		}
+	}()
 
-	fileinfo, err := file.Stat()
+	//buffered reading
+	reader := bufio.NewReader(file)
+	buffer := make([]byte, size)
+	for i := 0; ; i++ {
+		n, err := reader.Read(buffer)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println("Error reading file:", err)
+			}
+			break
+		} else {
+			//feed chunk to channel
+			output <- shard{i, string(buffer[0:n])}
+		}
+	}
+}
+
+//WriteResults collect results of concurrent encryption and write on file
+//filename path of output file
+//results channel that feeds the results to collect
+//done channel to signal completion: true for success, false for failure
+func writeResults(results chan shard, filename string, done chan bool) {
+	//collect results with a map
+	result := make(map[int]string)
+	for ct := range results {
+		result[ct.index] = ct.value
+	}
+	//open output file
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		fmt.Println(err)
+		done <- false
 		return
 	}
-
-	filesize := int(fileinfo.Size())
-	// Number of go routines we need to spawn.
-	concurrency := filesize / BufferSize
-	// buffer sizes that each of the go routine below should use. ReadAt
-	// returns an error if the buffer size is larger than the bytes returned
-	// from the file.
-	chunksizes := make([]chunk, concurrency)
-
-	// All buffer sizes are the same in the normal case. Offsets depend on the
-	// index. Second go routine should start at 100, for example, given our
-	// buffer size of 100.
-	for i := 0; i < concurrency; i++ {
-		chunksizes[i].bufsize = BufferSize
-		chunksizes[i].offset = int64(BufferSize * i)
+	//close file on exit
+	defer func() {
+		if err = file.Close(); err != nil {
+			fmt.Println("Error closing file:", err)
+			done <- false
+		}
+	}()
+	//write results on file in the correct order
+	for i := 0; i < len(result); i++ {
+		_, err = file.WriteString(result[i])
+		if err != nil {
+			fmt.Println(err)
+			done <- false
+			break
+		}
 	}
-
-	// check for any left over bytes. Add the residual number of bytes as the
-	// the last chunk size.
-	if remainder := filesize % BufferSize; remainder != 0 {
-		c := chunk{bufsize: remainder, offset: int64(concurrency * BufferSize)}
-		concurrency++
-		chunksizes = append(chunksizes, c)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(concurrency)
-
-	for i := 0; i < concurrency; i++ {
-		go func(chunksizes []chunk, i int) {
-			defer wg.Done()
-
-			chunk := chunksizes[i]
-			buffer := make([]byte, chunk.bufsize)
-			_, err := file.ReadAt(buffer, chunk.offset)
-
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			// write file on disk
-			partName := file.Name() + ".pt" + strconv.Itoa(i)
-			_, error := os.Create(partName)
-
-			if error != nil {
-				fmt.Println(err)
-				return
-			}
-			// write/save buffer to disk
-			ioutil.WriteFile(partName, buffer, os.ModeAppend)
-
-			// fmt.Println("bytes read, string(bytestream): ", bytesread)
-			// fmt.Println("bytestream to string: ", string(buffer))
-		}(chunksizes, i)
-	}
-
-	wg.Wait()
-}
-
-//GenFunc generic function on interfaces
-type GenFunc func(input interface{}) interface{}
-
-//ConcurrentWorker execute job concurrently
-//inp input for the worker
-//worker function that executes the job
-//output channel to feed back the results
-func ConcurrentWorker(inp interface{}, worker GenFunc, output chan interface{}, wg *sync.WaitGroup) {
-	output <- worker(inp)
-	wg.Done()
-}
-
-//CollectWork collect output of concurrent workers
-//input channel that feeds the results
-func CollectWork(input chan interface{}, collect GenFunc, done chan bool) {
-	i := 0
-	for shard := range input {
-		fmt.Println(shard)
-		i++
-	}
+	//signal succesful completion of writing
 	done <- true
 }
 

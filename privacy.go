@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
-	"sync"
 
 	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 	"golang.org/x/crypto/sha3"
@@ -53,7 +52,7 @@ func main() {
 	//compute the encapsulated key
 	keyEnc := u.EncapsulateKey(key)
 	//save encapsulated key on the ledger
-	keyIndex := AppendEncapsulatedKeys("keys.enc", keyEnc)
+	keyIndex := AppendEncapsulatedKey("keys.enc", keyEnc)
 	//encrypt file
 	EncryptFile("test.txt", "out.txt", eps[:], key)
 	//unlock key from the ledger
@@ -99,60 +98,19 @@ func GenExp() *BN254.BIG {
 	return r
 }
 
-//genShard generate a shard cuncurrently
-//output channel to return results
-//s time-key
-func genShard(output chan *BN254.ECP, wg *sync.WaitGroup, s *BN254.BIG) {
-	temp := BN254.G1mul(B1, GenExp())
-	output <- BN254.G1mul(temp, s)
-	wg.Done()
-}
-
-//collectShards collect shards generated concurrently
-func collectShards(input chan *BN254.ECP, eps []BN254.ECP, done chan bool) {
-	i := 0
-	for shard := range input {
-		eps[i] = *shard
-		i++
-	}
-	done <- true
-}
-
-//maskingShardsGen function used to generate the masking shards
-func maskingShardsGen(s *BN254.BIG, eps []BN254.ECP) {
-	//concurrently generate each shard
-	var wg sync.WaitGroup
-	shardChannel := make(chan *BN254.ECP, len(eps))
-	for i := 0; i < len(eps); i++ {
-		wg.Add(1)
-		go genShard(shardChannel, &wg, s)
-	}
-	//collect results
-	done := make(chan bool)
-	go collectShards(shardChannel, eps, done)
-	wg.Wait()
-	close(shardChannel)
-	<-done
-}
-
-type mask struct {
-	index int
-	eps   *BN254.ECP
-}
-
-//shardUpdate concurrently update a shard
+//shardUpdate update a shard
 //sNew new time-key
 //s old time-key
 //esp shard value
 //output channel where to feed the updated shard
-func shardUpdate(old mask, s, sNew *BN254.BIG) shard {
+func shardUpdate(index int, old *BN254.ECP, s, sNew *BN254.BIG) shard {
 	inv := BN254.NewBIGcopy(s)
 	inv.Invmodp(ORDER)
-	temp := BN254.G1mul(old.eps, sNew)
+	temp := BN254.G1mul(old, sNew)
 	new := BN254.G1mul(temp, inv)
 	encoded := make([]byte, BN254.MODBYTES+1)
 	new.ToBytes(encoded, true)
-	return shard{old.index, string(encoded)}
+	return shard{index, string(encoded)}
 }
 
 //KeyUpdate this function is used for both update and unlock the key for decryption
@@ -190,26 +148,3 @@ func OneTimePad(data []byte, eps *BN254.ECP, token *BN254.ECP2) []byte {
 	res := TruncXor(data, h[:]) //handle error
 	return res
 }
-
-//encryps 64 byte message taken in input
-// func ShardEncrypt(m []byte, k BN254.BIG, eps *BN254.ECP, token *BN254.ECP2) []byte {
-// 	t := BN254.G2mul(token, &k)
-// 	h := HashAte(eps, t)
-// 	c, _ := xor.XORBytes(m[:], h[:]) //handle error
-// 	return c
-// }
-
-// func KeyEncaps(token *BN254.ECP2, k BN254.BIG, ql *BN254.ECP2, mu BN254.BIG, v BN254.BIG) *BN254.ECP2 {
-// 	inv := BN254.NewBIGcopy(&mu)
-// 	inv.Invmodp(ORDER)
-// 	temp := BN254.G2mul(token, inv)
-// 	temp = BN254.G2mul(temp, &v)
-// 	k := BN254.G2mul(token, &k)
-// 	return k
-// }
-
-// func ShardDecrypt(c []byte, eps *BN254.ECP, token *BN254.ECP2) []byte {
-// 	h := HashAte(eps, token)
-// 	m, _ := xor.XORBytes(c[:], h[:]) //handle error
-// 	return m
-// }

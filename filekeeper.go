@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 )
@@ -13,36 +14,33 @@ import (
 //generate the masking shards, save them on shardsFile
 //return secret time-key st
 func InitUpdLedger(shardsFile string) *BN254.BIG {
-	//set up the shards
-	var eps [MaxShards]BN254.ECP
 	//generate time-key
 	s := GenExp()
-	//compute masking shards
-	maskingShardsGen(s, eps[:])
-	//open output file
-	file, err := os.OpenFile(shardsFile, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		fmt.Println(err)
-		return nil
+	//channels for concurrent generation
+	shardChannel := make(chan shard, MaxShards)
+	done := make(chan bool)
+	//concurrently generate each shard
+	var wg sync.WaitGroup
+	for i := 0; i < MaxShards; i++ {
+		wg.Add(1)
+		go func() {
+			temp := BN254.G1mul(B1, GenExp())
+			temp = BN254.G1mul(temp, s)
+			encoded := make([]byte, BN254.MODBYTES+1)
+			temp.ToBytes(encoded, true)
+			shardChannel <- shard{i, string(encoded)}
+			wg.Done()
+		}()
 	}
-	//close file on exit
-	defer func() {
-		if err = file.Close(); err != nil {
-			fmt.Println("Error closing file:", err)
-		}
-	}()
-	//write shards on file
-	encoded := make([]byte, BN254.MODBYTES+1)
-	for _, shard := range eps {
-		//encode shard as compressed curve point
-		shard.ToBytes(encoded, true)
-		_, err = file.Write(encoded)
-		if err != nil {
-			fmt.Println(err)
-			return nil
-		}
+	//collect and write results
+	go writeResults(shardChannel, shardsFile, done)
+	wg.Wait()
+	close(shardChannel)
+	if <-done {
+		fmt.Println("Shards correctly written on file!")
+		return s
 	}
-	return s
+	return nil
 }
 
 //GetShards read masking shards from shardsFile
@@ -85,40 +83,11 @@ func GetShards(shardsFile string, numShards int) []BN254.ECP {
 	return shards
 }
 
-//WriteEncapsulatedKeys write the encapsulated keys on file
-//keyEncFile output file path
-//encKeys slice of encapsulated keys
-func WriteEncapsulatedKeys(keyEncFile string, encKeys []BN254.ECP2) {
-	//open output file
-	file, err := os.OpenFile(keyEncFile, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	//close file on exit
-	defer func() {
-		if err = file.Close(); err != nil {
-			fmt.Println("Error closing file:", err)
-		}
-	}()
-	//write encapsulated keys on file
-	encoded := make([]byte, 2*BN254.MODBYTES+1)
-	for _, key := range encKeys {
-		//encode shard as compressed curve point
-		key.ToBytes(encoded, true)
-		_, err = file.Write(encoded)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}
-}
-
-//AppendEncapsulatedKeys append newest encapsulated key on key-file
+//AppendEncapsulatedKey append newest encapsulated key on key-file
 //keyEncFile output file path
 //encKey encapsulated key to append
 //returns the index of the written key
-func AppendEncapsulatedKeys(keyEncFile string, encKey *BN254.ECP2) int64 {
+func AppendEncapsulatedKey(keyEncFile string, encKey *BN254.ECP2) int64 {
 	//open output file
 	file, err := os.OpenFile(keyEncFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
@@ -190,8 +159,8 @@ func UpdateLedger(keyEncFile, shardsFile string, s *BN254.BIG) *BN254.BIG {
 	sNew := GenExp()
 	//process shard file concurrently
 	shardUpd := func(inp shard) shard {
-		old := mask{inp.index, BN254.ECP_fromBytes([]byte(inp.value))}
-		return shardUpdate(old, s, sNew)
+		old := BN254.ECP_fromBytes([]byte(inp.value))
+		return shardUpdate(inp.index, old, s, sNew)
 	}
 	ProcessFile(shardsFile, shardsFile, shardUpd, MaxShards, int(BN254.MODBYTES+1))
 
