@@ -39,9 +39,9 @@ func main() {
 
 	/* try this if you want to test */
 	//generate shards and get time-key
-	s := InitUpdLedger("shards.enc")
+	s := InitUpdLedger("test/shards.enc")
 	//read masking shards from file
-	eps := GetShards("shards.enc", MaxShards)
+	eps := GetShards("test/shards.enc", MaxShards)
 
 	//generate user keys
 	u := GenUser()
@@ -52,26 +52,26 @@ func main() {
 	//compute the encapsulated key
 	keyEnc := u.EncapsulateKey(key)
 	//save encapsulated key on the ledger
-	keyIndex := AppendEncapsulatedKey("keys.enc", keyEnc)
+	keyIndex := AppendEncapsulatedKey("test/keys.enc", keyEnc)
 	//encrypt file
-	EncryptFile("test.txt", "out.txt", eps[:], key)
+	EncryptFile("test/test.txt", "test/out.txt", eps[:], key)
 	//unlock key from the ledger
-	unlock := u.UnlockKey(GetEncKey("keys.enc", keyIndex))
+	unlock := u.UnlockKey(GetEncKey("test/keys.enc", keyIndex))
 	//decrypt file
-	EncryptFile("out.txt", "dec.txt", eps[:], unlock)
+	EncryptFile("test/out.txt", "test/dec.txt", eps[:], unlock)
 	//update ledger
-	sNew := UpdateLedger("keys.enc", "shards.enc", s)
+	sNew := UpdateLedger("test/keys.enc", "test/shards.enc", s)
 	//compare time keys
 	fmt.Println(s.ToString())
 	fmt.Println(sNew.ToString())
 	//get updated encapsulated key from ledger
-	keyEncNew := GetEncKey("keys.enc", keyIndex)
+	keyEncNew := GetEncKey("test/keys.enc", keyIndex)
 	//unlock key
 	unlockNew := u.UnlockKey(keyEncNew)
 	//get updated shards from ledger
-	epsNew := GetShards("shards.enc", MaxShards)
+	epsNew := GetShards("test/shards.enc", MaxShards)
 	//decrypt file again
-	EncryptFile("out.txt", "dec2.txt", epsNew[:], unlockNew)
+	EncryptFile("test/out.txt", "test/dec2.txt", epsNew[:], unlockNew)
 }
 
 //goodExp check that e is in [2..ORDER -1]
