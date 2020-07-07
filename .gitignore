@@ -1,3 +1,4 @@
+#main folder
 dec2.txt
 keys.enc
 shards.enc
@@ -6,3 +7,11 @@ dec.txt
 block0
 block1
 .vscode
+go.mod
+go.sum
+
+# test folder
+test/dec*
+test/bloc*
+test/keys*
+test/shards.enc
