@@ -3,6 +3,8 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"io/ioutil"
+	"os"
 
 	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 	"golang.org/x/crypto/sha3"
@@ -36,42 +38,41 @@ const FP12LEN = BN254.MODBYTES*11 + 32
 
 func main() {
 	fmt.Println("Private Ledger: Welcome!")
-
 	/* try this if you want to test */
+	//reset files
+	toClean := []string{"keys.enc"}
+	for _, filename := range toClean {
+		err := os.Remove(filename)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+	//init ledger
+	ledger := Ledger{"shards.enc", "keys.enc", "block"}
 	//generate shards and get time-key
-	s := InitUpdLedger("shards.enc")
-	//read masking shards from file
-	eps := GetShards("shards.enc", MaxShards)
-
+	s := ledger.InitUpdate()
 	//generate user keys
 	u := GenUser()
 	//compute encryption token
 	token := TokenGen(u.PublicKey, s)
-	//generate encryption key
-	key := BN254.G2mul(token, GenExp())
-	//compute the encapsulated key
-	keyEnc := u.EncapsulateKey(key)
-	//save encapsulated key on the ledger
-	keyIndex := AppendEncapsulatedKey("keys.enc", keyEnc)
-	//encrypt file
-	EncryptFile("test.txt", "out.txt", eps[:], key)
+	//add a block
+	index := u.AddBlock(ledger, token, "test.txt")
+	fmt.Println(index)
 	//unlock key from the ledger
-	unlock := u.UnlockKey(GetEncKey("keys.enc", keyIndex))
+	unlocked := u.UnlockKey(ledger.GetEncKey(index))
 	//decrypt file
-	EncryptFile("out.txt", "dec.txt", eps[:], unlock)
+	ledger.DecryptBlock(index, unlocked, "dec.txt")
 	//update ledger
-	sNew := UpdateLedger("keys.enc", "shards.enc", s)
+	sNew := ledger.Update(s)
 	//compare time keys
 	fmt.Println(s.ToString())
 	fmt.Println(sNew.ToString())
 	//get updated encapsulated key from ledger
-	keyEncNew := GetEncKey("keys.enc", keyIndex)
+	keyEncNew := ledger.GetEncKey(index)
 	//unlock key
-	unlockNew := u.UnlockKey(keyEncNew)
-	//get updated shards from ledger
-	epsNew := GetShards("shards.enc", MaxShards)
+	unlockedNew := u.UnlockKey(keyEncNew)
 	//decrypt file again
-	EncryptFile("out.txt", "dec2.txt", epsNew[:], unlockNew)
+	ledger.DecryptBlock(index, unlockedNew, "dec2.txt")
 }
 
 //goodExp check that e is in [2..ORDER -1]
@@ -134,6 +135,7 @@ func TokenGen(ql *BN254.ECP2, st *BN254.BIG) *BN254.ECP2 {
 //HashAte this function computes the Ate-pairing of the elements in input then it hashes the result
 func HashAte(eps *BN254.ECP, token *BN254.ECP2) []byte {
 	var gtB [FP12LEN]byte
+	//NB: to compute the pairing correctly the final exp has to be done explicitly
 	gt := BN254.Ate(token, eps)
 	gt = BN254.Fexp(gt)
 	gt.ToBytes(gtB[:])
@@ -147,4 +149,15 @@ func OneTimePad(data []byte, eps *BN254.ECP, token *BN254.ECP2) []byte {
 	h := HashAte(eps, token)
 	res := TruncXor(data, h[:]) //handle error
 	return res
+}
+
+//FileDigest compute SHA3 digest of a file
+func FileDigest(filename string) []byte {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		fmt.Println("File reading error", err)
+		return nil
+	}
+	h := sha3.Sum512(data)
+	return h[:]
 }
