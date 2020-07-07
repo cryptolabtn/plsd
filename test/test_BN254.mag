@@ -26,7 +26,7 @@ end for;
 //generate s_t1
 s_t1:=52010273955080549;
 res_update:=[];
-temp := InverseMod(s_t0, modulus) * s_t1;
+temp := InverseMod(s_t0, order) * s_t1;
 for i in [1..10] do
     // temp:=(s_t1*(-s_t0))*res[i];
     tempp :=  temp * res[i];
@@ -34,6 +34,4 @@ for i in [1..10] do
 end for;
 
 //test Token
-token:= B1*InverseMod(s_t0, modulus);
-
-
+token:= B1*InverseMod(s_t0, order);
