@@ -13,9 +13,10 @@ type shard struct {
 	value string
 }
 
-//ReadChunks read filename splitting it in chunks
-//each chunk is size bytes long
-//and fed to output channel for concurrent processing
+//ReadChunks read file to process chunks concurrently
+//filename path of file to read
+//output channel where the chunks are fed for concurrent processing
+//size length in bytes of each chunk
 func readChunks(filename string, output chan shard, size int) {
 	//close channel on exit to signal end of input operations
 	defer close(output)
@@ -31,13 +32,12 @@ func readChunks(filename string, output chan shard, size int) {
 			fmt.Println("Error closing file:", err)
 		}
 	}()
-
 	//buffered reading
 	reader := bufio.NewReader(file)
 	buffer := make([]byte, size)
 	for i := 0; ; i++ {
-		n, err := reader.Read(buffer)
-		if err != nil {
+		n, err := io.ReadFull(reader, buffer)
+		if err != nil && err != io.ErrUnexpectedEOF {
 			if err != io.EOF {
 				fmt.Println("Error reading file:", err)
 			}
@@ -49,9 +49,9 @@ func readChunks(filename string, output chan shard, size int) {
 	}
 }
 
-//WriteResults collect results of concurrent encryption and write on file
-//filename path of output file
+//WriteResults collect results of concurrent processing and write on file
 //results channel that feeds the results to collect
+//filename path of output file
 //done channel to signal completion: true for success, false for failure
 func writeResults(results chan shard, filename string, done chan bool) {
 	//collect results with a map
@@ -99,7 +99,6 @@ func ProcessFile(inputFile, outputFile string, process func(shard) shard, num, s
 	resultChannel := make(chan shard, num)
 	//read file
 	go readChunks(inputFile, readChannel, size)
-
 	//concurrently encrypt each shard
 	var wg sync.WaitGroup
 	for i := 0; i < num; i++ {

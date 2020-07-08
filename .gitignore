@@ -1,17 +1,11 @@
 #main folder
-dec2.txt
-keys.enc
-shards.enc
-dec.txt
-0.enc
-block0
-block1
 .vscode
 go.mod
 go.sum
 
 # test folder
+test/ct*
 test/dec*
-test/bloc*
-test/keys*
+test/block*
+test/keys.enc
 test/shards.enc
