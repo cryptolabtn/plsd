@@ -1,11 +1,27 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 )
 
+//default path
+const defPath string = "docs/private-ledger.pdf"
+
 func main() {
+	//flag -path pathToFile
+	fileptr := flag.String("path", defPath, "file path")
+	flag.Parse()
+	var path string = defPath
+	//check if a path has been passed as input
+	if *fileptr == defPath {
+		fmt.Println("No input path. It has been set to default: ", *fileptr)
+	} else {
+		path = *fileptr
+		fmt.Println("Loaded file: ", *fileptr)
+	}
+
 	fmt.Println("Private Ledger: Welcome!")
 	/* try this if you want to test */
 	//reset files
@@ -25,7 +41,7 @@ func main() {
 	//compute encryption token
 	token := TokenGen(u.PublicKey, s)
 	//add a block
-	index := u.AddBlock(ledger, token, "docs/private-ledger.pdf")
+	index := u.AddBlock(ledger, token, path)
 	//index := u.AddBlock(ledger, token, "test/test.txt")
 	fmt.Println(index)
 	//unlock key from the ledger
