@@ -2,9 +2,9 @@
 
 This repo contains a GO implementation of the protocol [Public Ledger for Sensitive Data](https://arxiv.org/abs/1906.06912).
 
-To run the protocol, change the permission of the file ```private_ledger```:
+To run the protocol, make the file ```private_ledger``` executable:
 ```
-sudo chmod -x private_ledger
+sudo chmod +x private_ledger
 ```
 and then run it:
 ```
