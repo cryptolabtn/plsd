@@ -123,3 +123,31 @@ func ProcessFile(inputFile, outputFile string, process func(shard) shard, num, s
 		fmt.Println("file written successfully!")
 	}
 }
+
+//ReadValue read a single value from file
+//filePath path to the file containing a series of same-size values
+//index index of the desired value
+//size size of the single values
+//return the encoding of the value read
+func ReadValue(filePath string, index, size int64) []byte {
+	//open input file
+	file, err := os.Open(filePath)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return nil
+	}
+	//close file on exit
+	defer func() {
+		if err = file.Close(); err != nil {
+			fmt.Println("Error closing file:", err)
+		}
+	}()
+	//offset reading
+	buffer := make([]byte, size)
+	n, err := file.ReadAt(buffer, index*size)
+	if n < int(size) {
+		fmt.Println("Error reading file: incomplete value!")
+		return nil
+	}
+	return buffer
+}

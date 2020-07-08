@@ -41,6 +41,19 @@ func (u User) UnlockKey(keyEnc *BN254.ECP2) *BN254.ECP2 {
 	return FracMult(keyEnc, u.v, u.mu)
 }
 
+//CountShards compute number of shards necessary to encrypt a file
+//filePath path to file
+//return number of shards necessary to encrypt
+//including the possibly partial last chunk
+func CountShards(filePath string) int {
+	//compute file size
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		panic(err)
+	}
+	return (int(fi.Size())-1)/ShardSize + 1
+}
+
 //EncryptFile read file and ecrypt/decrypt concurrently
 //then collect results and write on file
 //inptutFile path to input file
@@ -48,14 +61,8 @@ func (u User) UnlockKey(keyEnc *BN254.ECP2) *BN254.ECP2 {
 //eps masking shards for encryption
 //key encryption key
 func EncryptFile(inputFile, outputFile string, eps []BN254.ECP, key *BN254.ECP2) {
-	//compute file size, terminate if too big (not enough shards to process it)
-	fi, err := os.Stat(inputFile)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	//count number of shards necessary, including possibly partial last chunk
-	numShards := (int(fi.Size())-1)/ShardSize + 1
+	//check that there are enough masking shards to encrypt
+	numShards := CountShards(inputFile)
 	if numShards > MaxShards {
 		fmt.Println("File too big!")
 		return
@@ -75,6 +82,8 @@ func EncryptFile(inputFile, outputFile string, eps []BN254.ECP, key *BN254.ECP2)
 //fileName path to file to encrypt
 //return the index of the added block (and corresponding encapsulated key)
 func (u User) AddBlock(ledger Ledger, token *BN254.ECP2, fileName string) int64 {
+	//compute no. of shards necessary, for checking and optimal reading
+	numShards := CountShards(fileName)
 	//generate encryption key
 	key := BN254.G2mul(token, GenExp())
 	//compute the encapsulated key
@@ -82,7 +91,7 @@ func (u User) AddBlock(ledger Ledger, token *BN254.ECP2, fileName string) int64 
 	//save encapsulated key on the ledger
 	keyIndex := ledger.AppendEncapsulatedKey(keyEnc)
 	//read masking shards from file
-	eps := ledger.GetShards(MaxShards)
+	eps := ledger.GetShards(numShards)
 	//compute ciphertext file name
 	ctName := ledger.EncryptPath + strconv.FormatInt(keyIndex, 16) + ".enc"
 	//encrypt file
@@ -94,7 +103,12 @@ func (u User) AddBlock(ledger Ledger, token *BN254.ECP2, fileName string) int64 
 	content = append(content, FileDigest(fileName)...)
 	content = append(content, FileDigest(ctName)...)
 	//finally control shard
-	content = append(content, HashAte(&eps[keyIndex%MaxShards], keyEnc)...)
+	i := keyIndex % MaxShards
+	if i < int64(numShards) {
+		content = append(content, HashAte(&eps[i], keyEnc)...)
+	} else {
+		content = append(content, HashAte(ledger.GetSingleShard(i), keyEnc)...)
+	}
 	//write block on file
 	blockName := ledger.RootPath + strconv.FormatInt(keyIndex+1, 16)
 	//open file

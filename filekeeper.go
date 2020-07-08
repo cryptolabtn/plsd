@@ -172,6 +172,17 @@ func (ledger Ledger) GetShards(numShards int) []BN254.ECP {
 	return shards
 }
 
+//GetSingleShard read from file a single masking shard
+//index index of the masking shard to read
+//path to the file containing the masking shards taken from Ledger struct
+//return the masking shard
+func (ledger Ledger) GetSingleShard(index int64) *BN254.ECP {
+	//read from file
+	encoded := ReadValue(ledger.ShardsFile, index, int64(BN254.MODBYTES+1))
+	//decode key
+	return BN254.ECP_fromBytes(encoded)
+}
+
 //AppendEncapsulatedKey append newest encapsulated key on key-file
 //keyEncFile output file path
 //encKey encapsulated key to append
@@ -209,32 +220,14 @@ func (ledger Ledger) AppendEncapsulatedKey(encKey *BN254.ECP2) int64 {
 }
 
 //GetEncKey read from file the value of the encapsulated key
-//keyEncFile input file
 //index index of the key to read
-//return the encapsulated keys
+//path to the file containing the encapsulated keys taken from Ledger struct
+//return the encapsulated key
 func (ledger Ledger) GetEncKey(index int64) *BN254.ECP2 {
-	//open input file
-	file, err := os.Open(ledger.KeysFile)
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return nil
-	}
-	//close file on exit
-	defer func() {
-		if err = file.Close(); err != nil {
-			fmt.Println("Error closing file:", err)
-		}
-	}()
-	//offset reading
-	size := 2*BN254.MODBYTES + 1
-	buffer := make([]byte, size)
-	n, err := file.ReadAt(buffer, index*int64(size))
-	if n < int(size) {
-		fmt.Println("Error reading file: incomplete key!")
-		return nil
-	}
+	//read from file
+	encoded := ReadValue(ledger.KeysFile, index, int64(2*BN254.MODBYTES+1))
 	//decode key
-	return BN254.ECP2_fromBytes(buffer)
+	return BN254.ECP2_fromBytes(encoded)
 }
 
 //Update update shards and keys, and generate new time-key
