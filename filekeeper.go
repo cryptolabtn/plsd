@@ -57,21 +57,21 @@ func (ledger Ledger) CheckConsistency(target int64, ptDigest []byte) bool {
 		if !bytes.Equal(prevDigest, content[:64]) {
 			return false
 		}
-		//check hash of plaintext if it is the target block
-		if i == target {
-			if !bytes.Equal(ptDigest, content[64:128]) {
-				return false
-			}
-		}
 		//check hash of encrypted file
 		ctName := ledger.EncryptPath + strconv.FormatInt(i, 16) + ".enc"
 		ctDigest := FileDigest(ctName)
-		if !bytes.Equal(ctDigest, content[128:192]) {
+		if !bytes.Equal(ctDigest, content[64:128]) {
 			return false
 		}
+		//check hash of plaintext if it is the target block
+		if i == target {
+			if !bytes.Equal(ptDigest, content[128:192]) {
+				return false
+			}
+		}
 		//check control shard
-		control := HashAte(&eps[i%MaxShards], ledger.GetEncKey(i))
-		if !bytes.Equal(control, content[192:192+ShardSize]) {
+		control := HashAte(&eps[i%int64(MaxShards)], ledger.GetEncKey(i))
+		if !bytes.Equal(control, content[192:192+PadSize]) {
 			return false
 		}
 	}

@@ -14,11 +14,11 @@ import (
 //BITLEN curve bn254 modulus bit len
 const BITLEN = 254
 
-//ShardSize byte size of each shard
-const ShardSize = 64
+//PadSize byte size of each shard
+var PadSize = 64
 
 //MaxShards maximum number of shards
-const MaxShards = 10000
+var MaxShards = 10000
 
 //MOD modulus of curve BN254
 var MOD *BN254.BIG = BN254.NewBIGints(BN254.Modulus)
@@ -115,7 +115,7 @@ func HashAte(eps *BN254.ECP, key *BN254.ECP2) []byte {
 	gt = BN254.Fexp(gt)
 	gt.ToBytes(gtB[:])
 	h := sha3.Sum512(gtB[:])
-	return h[:ShardSize]
+	return h[:PadSize]
 }
 
 //TruncXor xor byte slices truncating the longest

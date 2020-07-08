@@ -51,7 +51,7 @@ func CountShards(filePath string) int {
 	if err != nil {
 		panic(err)
 	}
-	return (int(fi.Size())-1)/ShardSize + 1
+	return (int(fi.Size())-1)/PadSize + 1
 }
 
 //EncryptFile read file and ecrypt/decrypt concurrently
@@ -73,7 +73,7 @@ func EncryptFile(inputFile, outputFile string, eps []BN254.ECP, key *BN254.ECP2)
 		//feed result to output channel
 		return shard{inp.index, string(ct)}
 	}
-	ProcessFile(inputFile, outputFile, encr, numShards, ShardSize)
+	ProcessFile(inputFile, outputFile, encr, numShards, PadSize)
 }
 
 //AddBlock encrypt a file and add it to the ledger
@@ -99,11 +99,11 @@ func (u User) AddBlock(ledger Ledger, token *BN254.ECP2, fileName string) int64 
 	//compute content concatenating digests
 	//first hash of previous block
 	content := FileDigest(ledger.RootPath + strconv.FormatInt(keyIndex, 16))
-	//then plaintext and ciphertext
-	content = append(content, FileDigest(fileName)...)
+	//then ciphertext and plaintext
 	content = append(content, FileDigest(ctName)...)
+	content = append(content, FileDigest(fileName)...)
 	//finally control shard
-	i := keyIndex % MaxShards
+	i := keyIndex % int64(MaxShards)
 	if i < int64(numShards) {
 		content = append(content, HashAte(&eps[i], keyEnc)...)
 	} else {

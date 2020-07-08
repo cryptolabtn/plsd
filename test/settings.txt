@@ -1,0 +1,6 @@
+64
+5000
+test/shards.enc
+test/keys.enc
+test/block
+test/ct
