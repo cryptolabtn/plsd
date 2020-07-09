@@ -6,8 +6,33 @@ To run the protocol, make the file ```private_ledger``` executable:
 ```
 sudo chmod +x private_ledger
 ```
-and then run it:
+and then run it providing the path to settings file:
 ```
-./private_ledger -path InsertPathTofile
+./private_ledger -settings InsertPathToSettings
 ```
-If you do not provide the path in input it will load the default file: ```docs/private-ledger.pdf```
+
+or just:
+```
+./private_ledger
+```
+
+if you want to run it with the default settings file: ```test/settings.txt```.
+
+
+The settings file contains the following configurations:
+- padsize;
+- shards number;
+- shardsFile;
+- keysfile;
+- root path;
+- encryptPath.
+
+The default settings configuration is the following:
+```
+64
+5000
+test/shards.enc
+test/keys.enc
+test/block
+test/ct
+```
