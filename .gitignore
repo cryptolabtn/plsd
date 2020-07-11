@@ -1,6 +1,5 @@
 #main folder
 .vscode
-go.mod
 go.sum
 
 # test folder
