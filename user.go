@@ -5,14 +5,14 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
+	curve "github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 )
 
 //User struct that contains public and private keys of a user
 type User struct {
-	PublicKey *BN254.ECP2
-	mu        *BN254.BIG
-	v         *BN254.BIG
+	PublicKey *curve.ECP2
+	mu        *curve.BIG
+	v         *curve.BIG
 }
 
 //GenUser generate new random keys
@@ -21,7 +21,7 @@ func GenUser() *User {
 	mu := GenExp()
 	v := GenExp()
 	//compute public key
-	pk := BN254.G2mul(B2, mu)
+	pk := curve.G2mul(B2, mu)
 	return &User{pk, mu, v}
 }
 
@@ -29,7 +29,7 @@ func GenUser() *User {
 //key encryption key to be encapsulated
 //private keys are taken from User struct u
 //return encapsulated key
-func (u User) EncapsulateKey(key *BN254.ECP2) *BN254.ECP2 {
+func (u User) EncapsulateKey(key *curve.ECP2) *curve.ECP2 {
 	return FracMult(key, u.mu, u.v)
 }
 
@@ -37,7 +37,7 @@ func (u User) EncapsulateKey(key *BN254.ECP2) *BN254.ECP2 {
 //keyEnc encapsulated key to be unlocked
 //private keys are taken from User struct u
 //return unlocked key
-func (u User) UnlockKey(keyEnc *BN254.ECP2) *BN254.ECP2 {
+func (u User) UnlockKey(keyEnc *curve.ECP2) *curve.ECP2 {
 	return FracMult(keyEnc, u.v, u.mu)
 }
 
@@ -60,7 +60,7 @@ func CountShards(filePath string) int {
 //outputFile path to output file
 //eps masking shards for encryption
 //key encryption key
-func EncryptFile(inputFile, outputFile string, eps []BN254.ECP, key *BN254.ECP2) {
+func EncryptFile(inputFile, outputFile string, eps []curve.ECP, key *curve.ECP2) {
 	//check that there are enough masking shards to encrypt
 	numShards := CountShards(inputFile)
 	if numShards > MaxShards {
@@ -81,11 +81,11 @@ func EncryptFile(inputFile, outputFile string, eps []BN254.ECP, key *BN254.ECP2)
 //token encryption token given by filekeeper
 //fileName path to file to encrypt
 //return the index of the added block (and corresponding encapsulated key)
-func (u User) AddBlock(ledger Ledger, token *BN254.ECP2, fileName string) int64 {
+func (u User) AddBlock(ledger Ledger, token *curve.ECP2, fileName string) int64 {
 	//compute no. of shards necessary, for checking and optimal reading
 	numShards := CountShards(fileName)
 	//generate encryption key
-	key := BN254.G2mul(token, GenExp())
+	key := curve.G2mul(token, GenExp())
 	//compute the encapsulated key
 	keyEnc := u.EncapsulateKey(key)
 	//save encapsulated key on the ledger

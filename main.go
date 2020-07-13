@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
+	curve "github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 )
 
 //default path of settings file
@@ -113,7 +113,7 @@ func LoadSettings(settingsFile string) Ledger {
 	if err != nil {
 		panic(err)
 	}
-	if PadSize < int(BN254.MODBYTES) || PadSize > 64 {
+	if PadSize < int(curve.MODBYTES) || PadSize > 64 {
 		panic("Incorrect settings: Pad size outside limits")
 	}
 	//read number of shards to create

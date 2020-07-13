@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
+	curve "github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -20,34 +20,34 @@ var PadSize = 64
 //MaxShards maximum number of shards
 var MaxShards = 10000
 
-//MOD modulus of curve BN254
-var MOD *BN254.BIG = BN254.NewBIGints(BN254.Modulus)
+//MOD modulus of curve
+var MOD *curve.BIG = curve.NewBIGints(curve.Modulus)
 
-//ORDER order of curve BN254
-var ORDER *BN254.BIG = BN254.NewBIGints(BN254.CURVE_Order)
+//ORDER order of curve
+var ORDER *curve.BIG = curve.NewBIGints(curve.CURVE_Order)
 
 //B1 G1 generator
-var B1 *BN254.ECP = BN254.ECP_generator()
+var B1 *curve.ECP = curve.ECP_generator()
 
 //B2 G2 generator
-var B2 *BN254.ECP2 = BN254.ECP2_generator()
+var B2 *curve.ECP2 = curve.ECP2_generator()
 
 //FP12LEN array len FP12 elements
-const FP12LEN = BN254.MODBYTES*11 + 32
+const FP12LEN = curve.MODBYTES*11 + 32
 
 //GenExp generate cryptographically secure random exponent
 //result uniform in [2..ORDER-1]
-func GenExp() *BN254.BIG {
-	entropy := make([]byte, BN254.MODBYTES)
-	r := BN254.NewBIGint(0)
+func GenExp() *curve.BIG {
+	entropy := make([]byte, curve.MODBYTES)
+	r := curve.NewBIGint(0)
 	//continue generating until the value is in [2..ORDER-1]
-	for BN254.Comp(r, BN254.NewBIGint(1)) <= 0 {
+	for curve.Comp(r, curve.NewBIGint(1)) <= 0 {
 		_, err := rand.Read(entropy)
 		if err != nil {
 			fmt.Println("Error generating random exponent:", err)
 			panic(err)
 		}
-		r = BN254.FromBytes(entropy)
+		r = curve.FromBytes(entropy)
 		r.Mod(ORDER)
 	}
 	return r
@@ -59,13 +59,13 @@ func GenExp() *BN254.BIG {
 //s old time-key
 //sNew new time-key
 //returns shard struct with same index and the encoding of the new masking shard
-func shardUpdate(index int, old *BN254.ECP, s, sNew *BN254.BIG) shard {
-	inv := BN254.NewBIGcopy(s)
+func shardUpdate(index int, old *curve.ECP, s, sNew *curve.BIG) shard {
+	inv := curve.NewBIGcopy(s)
 	inv.Invmodp(ORDER)
-	new := BN254.G1mul(old, sNew)
-	new = BN254.G1mul(new, inv)
+	new := curve.G1mul(old, sNew)
+	new = curve.G1mul(new, inv)
 	//encode
-	encoded := make([]byte, BN254.MODBYTES+1)
+	encoded := make([]byte, curve.MODBYTES+1)
 	new.ToBytes(encoded, true)
 	return shard{index, string(encoded)}
 }
@@ -76,11 +76,11 @@ func shardUpdate(index int, old *BN254.ECP, s, sNew *BN254.BIG) shard {
 //den denominator of the fraction
 //num numerator of the fraction
 //returns (num/den)*el
-func FracMult(el *BN254.ECP2, den, num *BN254.BIG) *BN254.ECP2 {
-	inv := BN254.NewBIGcopy(den)
+func FracMult(el *curve.ECP2, den, num *curve.BIG) *curve.ECP2 {
+	inv := curve.NewBIGcopy(den)
 	inv.Invmodp(ORDER)
-	result := BN254.G2mul(el, inv)
-	result = BN254.G2mul(result, num)
+	result := curve.G2mul(el, inv)
+	result = curve.G2mul(result, num)
 	return result
 }
 
@@ -88,10 +88,10 @@ func FracMult(el *BN254.ECP2, den, num *BN254.BIG) *BN254.ECP2 {
 //pubKey public key of the user that requested the token
 //s time-key
 //returns the encryption token
-func TokenGen(pubKey *BN254.ECP2, s *BN254.BIG) *BN254.ECP2 {
-	inv := BN254.NewBIGcopy(s)
+func TokenGen(pubKey *curve.ECP2, s *curve.BIG) *curve.ECP2 {
+	inv := curve.NewBIGcopy(s)
 	inv.Invmodp(ORDER)
-	token := BN254.G2mul(pubKey, inv)
+	token := curve.G2mul(pubKey, inv)
 	return token
 }
 
@@ -99,11 +99,11 @@ func TokenGen(pubKey *BN254.ECP2, s *BN254.BIG) *BN254.ECP2 {
 //eps masking shard
 //key encryption key
 //return the pad for encryption/decryption
-func HashAte(eps *BN254.ECP, key *BN254.ECP2) []byte {
+func HashAte(eps *curve.ECP, key *curve.ECP2) []byte {
 	var gtB [FP12LEN]byte
 	//NB: to compute the pairing correctly the final exp has to be done explicitly
-	gt := BN254.Ate(key, eps)
-	gt = BN254.Fexp(gt)
+	gt := curve.Ate(key, eps)
+	gt = curve.Fexp(gt)
 	gt.ToBytes(gtB[:])
 	h := sha3.Sum512(gtB[:])
 	return h[:PadSize]
@@ -132,7 +132,7 @@ func TruncXor(a, b []byte) []byte {
 //eps masking shard
 //key encryption key
 //return the processed data
-func OneTimePad(data []byte, eps *BN254.ECP, key *BN254.ECP2) []byte {
+func OneTimePad(data []byte, eps *curve.ECP, key *curve.ECP2) []byte {
 	h := HashAte(eps, key)
 	res := TruncXor(data, h[:]) //handle error
 	return res
