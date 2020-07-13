@@ -35,29 +35,20 @@ var B2 *BN254.ECP2 = BN254.ECP2_generator()
 //FP12LEN array len FP12 elements
 const FP12LEN = BN254.MODBYTES*11 + 32
 
-//goodExp check that e is in [2..ORDER -1]
-//e exponent to be checked
-//return true iff e is in [2..ORDER -1]
-func goodExp(e *BN254.BIG) bool {
-	if BN254.Comp(e, BN254.NewBIGint(1)) > 0 {
-		return BN254.Comp(e, ORDER) < 0
-	}
-	return false
-}
-
 //GenExp generate cryptographically secure random exponent
 //result uniform in [2..ORDER-1]
 func GenExp() *BN254.BIG {
 	entropy := make([]byte, BN254.MODBYTES)
 	r := BN254.NewBIGint(0)
 	//continue generating until the value is in [2..ORDER-1]
-	for !goodExp(r) {
+	for BN254.Comp(r, BN254.NewBIGint(1)) <= 0 {
 		_, err := rand.Read(entropy)
 		if err != nil {
 			fmt.Println("Error generating random exponent:", err)
 			panic(err)
 		}
 		r = BN254.FromBytes(entropy)
+		r.Mod(ORDER)
 	}
 	return r
 }
