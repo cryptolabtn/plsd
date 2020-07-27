@@ -29,8 +29,8 @@ The settings file contains the following configurations:
 
 The default settings configuration is the following:
 ```
-64
-5000
+96
+10000
 test/shards.enc
 test/keys.enc
 test/block
