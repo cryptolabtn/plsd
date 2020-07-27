@@ -10,7 +10,7 @@ import (
 
 //User struct that contains public and private keys of a user
 type User struct {
-	PublicKey *curve.ECP2
+	PublicKey *curve.ECP
 	mu        *curve.BIG
 	v         *curve.BIG
 }
@@ -21,7 +21,7 @@ func GenUser() *User {
 	mu := GenExp()
 	v := GenExp()
 	//compute public key
-	pk := curve.G2mul(B2, mu)
+	pk := curve.G1mul(B1, mu)
 	return &User{pk, mu, v}
 }
 
@@ -29,7 +29,7 @@ func GenUser() *User {
 //key encryption key to be encapsulated
 //private keys are taken from User struct u
 //return encapsulated key
-func (u User) EncapsulateKey(key *curve.ECP2) *curve.ECP2 {
+func (u User) EncapsulateKey(key *curve.ECP) *curve.ECP {
 	return FracMult(key, u.mu, u.v)
 }
 
@@ -37,7 +37,7 @@ func (u User) EncapsulateKey(key *curve.ECP2) *curve.ECP2 {
 //keyEnc encapsulated key to be unlocked
 //private keys are taken from User struct u
 //return unlocked key
-func (u User) UnlockKey(keyEnc *curve.ECP2) *curve.ECP2 {
+func (u User) UnlockKey(keyEnc *curve.ECP) *curve.ECP {
 	return FracMult(keyEnc, u.v, u.mu)
 }
 
@@ -60,7 +60,7 @@ func CountShards(filePath string) int {
 //outputFile path to output file
 //eps masking shards for encryption
 //key encryption key
-func EncryptFile(inputFile, outputFile string, eps []curve.ECP, key *curve.ECP2) {
+func EncryptFile(inputFile, outputFile string, eps []curve.ECP2, key *curve.ECP) {
 	//check that there are enough masking shards to encrypt
 	numShards := CountShards(inputFile)
 	if numShards > MaxShards {
@@ -81,11 +81,11 @@ func EncryptFile(inputFile, outputFile string, eps []curve.ECP, key *curve.ECP2)
 //token encryption token given by filekeeper
 //fileName path to file to encrypt
 //return the index of the added block (and corresponding encapsulated key)
-func (u User) AddBlock(ledger Ledger, token *curve.ECP2, fileName string) int64 {
+func (u User) AddBlock(ledger Ledger, token *curve.ECP, fileName string) int64 {
 	//compute no. of shards necessary, for checking and optimal reading
 	numShards := CountShards(fileName)
 	//generate encryption key
-	key := curve.G2mul(token, GenExp())
+	key := curve.G1mul(token, GenExp())
 	//compute the encapsulated key
 	keyEnc := u.EncapsulateKey(key)
 	//save encapsulated key on the ledger

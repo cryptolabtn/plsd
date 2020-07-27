@@ -113,7 +113,7 @@ func LoadSettings(settingsFile string) Ledger {
 	if err != nil {
 		panic(err)
 	}
-	if PadSize < int(curve.MODBYTES) || PadSize > 64 {
+	if PadSize < int(2*curve.MODBYTES) {
 		panic("Incorrect settings: Pad size outside limits")
 	}
 	//read number of shards to create

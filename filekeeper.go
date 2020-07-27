@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
+	curve "github.com/gaetanorusso/public_ledger_sensitive_data/miracl/go/core/BN254"
 )
 
 //Ledger struct that contains file names of the parts of the ledger
@@ -40,7 +40,7 @@ func (ledger Ledger) CheckConsistency(target int64, ptDigest []byte) bool {
 			fmt.Println(err)
 			return false
 		}
-		tot = fi.Size() / int64(2*BN254.MODBYTES+1)
+		tot = fi.Size() / int64(curve.MODBYTES+1)
 	}
 	//read masking shards from file
 	eps := ledger.GetShards(MaxShards)
@@ -54,24 +54,24 @@ func (ledger Ledger) CheckConsistency(target int64, ptDigest []byte) bool {
 		}
 		//check link with previous block
 		prevDigest := FileDigest(ledger.RootPath + strconv.FormatInt(i, 16))
-		if !bytes.Equal(prevDigest, content[:64]) {
+		if !bytes.Equal(prevDigest, content[:HashLen]) {
 			return false
 		}
 		//check hash of encrypted file
 		ctName := ledger.EncryptPath + strconv.FormatInt(i, 16) + ".enc"
 		ctDigest := FileDigest(ctName)
-		if !bytes.Equal(ctDigest, content[64:128]) {
+		if !bytes.Equal(ctDigest, content[HashLen:2*HashLen]) {
 			return false
 		}
 		//check hash of plaintext if it is the target block
 		if i == target {
-			if !bytes.Equal(ptDigest, content[128:192]) {
+			if !bytes.Equal(ptDigest, content[2*HashLen:3*HashLen]) {
 				return false
 			}
 		}
 		//check control shard
 		control := HashAte(&eps[i%int64(MaxShards)], ledger.GetEncKey(i))
-		if !bytes.Equal(control, content[192:192+PadSize]) {
+		if !bytes.Equal(control, content[3*HashLen:3*HashLen+PadSize]) {
 			return false
 		}
 	}
@@ -84,7 +84,7 @@ func (ledger Ledger) CheckConsistency(target int64, ptDigest []byte) bool {
 //out path to file where to write decrypted file
 //the shards are taken from the ledger
 //correctly terminates only if the decryption is consistent with the static ledger
-func (ledger Ledger) DecryptBlock(index int64, unlocked *BN254.ECP2, out string) {
+func (ledger Ledger) DecryptBlock(index int64, unlocked *curve.ECP, out string) {
 	//get shards
 	eps := ledger.GetShards(MaxShards)
 	//decrypt file
@@ -102,7 +102,7 @@ func (ledger Ledger) DecryptBlock(index int64, unlocked *BN254.ECP2, out string)
 //generates empty root block,
 //generate the masking shards, save them on shardsFile
 //return secret time-key s
-func (ledger Ledger) Init() *BN254.BIG {
+func (ledger Ledger) Init() *curve.BIG {
 	//create empty root block
 	emptyFile, err := os.Create(ledger.RootPath + strconv.Itoa(0))
 	if err != nil {
@@ -119,9 +119,9 @@ func (ledger Ledger) Init() *BN254.BIG {
 	for i := 0; i < MaxShards; i++ {
 		wg.Add(1)
 		go func(i int) {
-			temp := BN254.G1mul(B1, GenExp())
-			temp = BN254.G1mul(temp, s)
-			encoded := make([]byte, BN254.MODBYTES+1)
+			temp := curve.G2mul(B2, GenExp())
+			temp = curve.G2mul(temp, s)
+			encoded := make([]byte, 2*curve.MODBYTES+1)
 			temp.ToBytes(encoded, true)
 			shardChannel <- shard{i, string(encoded)}
 			wg.Done()
@@ -142,7 +142,7 @@ func (ledger Ledger) Init() *BN254.BIG {
 //file path taken from Ledger struct
 //numShards number of shards to read
 //return slice containing the masking shards read
-func (ledger Ledger) GetShards(numShards int) []BN254.ECP {
+func (ledger Ledger) GetShards(numShards int) []curve.ECP2 {
 	//open shardsFile
 	file, err := os.Open(ledger.ShardsFile)
 	if err != nil {
@@ -157,9 +157,9 @@ func (ledger Ledger) GetShards(numShards int) []BN254.ECP {
 	}()
 	//buffered reading
 	reader := bufio.NewReader(file)
-	size := BN254.MODBYTES + 1
+	size := 2*curve.MODBYTES + 1
 	buffer := make([]byte, size)
-	shards := make([]BN254.ECP, numShards)
+	shards := make([]curve.ECP2, numShards)
 	for i := 0; i < numShards; i++ {
 		_, err := io.ReadFull(reader, buffer)
 		if err != nil {
@@ -167,7 +167,7 @@ func (ledger Ledger) GetShards(numShards int) []BN254.ECP {
 			return nil
 		}
 		//decode shard
-		shards[i] = *BN254.ECP_fromBytes(buffer)
+		shards[i] = *curve.ECP2_fromBytes(buffer)
 	}
 	return shards
 }
@@ -176,18 +176,18 @@ func (ledger Ledger) GetShards(numShards int) []BN254.ECP {
 //index index of the masking shard to read
 //path to the file containing the masking shards taken from Ledger struct
 //return the masking shard
-func (ledger Ledger) GetSingleShard(index int64) *BN254.ECP {
+func (ledger Ledger) GetSingleShard(index int64) *curve.ECP2 {
 	//read from file
-	encoded := ReadValue(ledger.ShardsFile, index, int64(BN254.MODBYTES+1))
+	encoded := ReadValue(ledger.ShardsFile, index, int64(2*curve.MODBYTES+1))
 	//decode key
-	return BN254.ECP_fromBytes(encoded)
+	return curve.ECP2_fromBytes(encoded)
 }
 
 //AppendEncapsulatedKey append newest encapsulated key on key-file
 //keyEncFile output file path
 //encKey encapsulated key to append
 //returns the index of the written key
-func (ledger Ledger) AppendEncapsulatedKey(encKey *BN254.ECP2) int64 {
+func (ledger Ledger) AppendEncapsulatedKey(encKey *curve.ECP) int64 {
 	//open output file
 	file, err := os.OpenFile(ledger.KeysFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
@@ -206,7 +206,7 @@ func (ledger Ledger) AppendEncapsulatedKey(encKey *BN254.ECP2) int64 {
 		return -1
 	}
 	//write encapsulated key on file
-	size := 2*BN254.MODBYTES + 1
+	size := curve.MODBYTES + 1
 	encoded := make([]byte, size)
 	//encode shard as compressed curve point
 	encKey.ToBytes(encoded, true)
@@ -223,11 +223,11 @@ func (ledger Ledger) AppendEncapsulatedKey(encKey *BN254.ECP2) int64 {
 //index index of the key to read
 //path to the file containing the encapsulated keys taken from Ledger struct
 //return the encapsulated key
-func (ledger Ledger) GetEncKey(index int64) *BN254.ECP2 {
+func (ledger Ledger) GetEncKey(index int64) *curve.ECP {
 	//read from file
-	encoded := ReadValue(ledger.KeysFile, index, int64(2*BN254.MODBYTES+1))
+	encoded := ReadValue(ledger.KeysFile, index, int64(curve.MODBYTES+1))
 	//decode key
-	return BN254.ECP2_fromBytes(encoded)
+	return curve.ECP_fromBytes(encoded)
 }
 
 //Update update shards and keys, and generate new time-key
@@ -235,15 +235,15 @@ func (ledger Ledger) GetEncKey(index int64) *BN254.ECP2 {
 //shardsFile file containing masking shards
 //s current time-key
 //return new time-key
-func (ledger Ledger) Update(s *BN254.BIG) *BN254.BIG {
+func (ledger Ledger) Update(s *curve.BIG) *curve.BIG {
 	//generate time-key
 	sNew := GenExp()
 	//process shard file concurrently
 	shardUpd := func(inp shard) shard {
-		old := BN254.ECP_fromBytes([]byte(inp.value))
+		old := curve.ECP2_fromBytes([]byte(inp.value))
 		return shardUpdate(inp.index, old, s, sNew)
 	}
-	ProcessFile(ledger.ShardsFile, ledger.ShardsFile, shardUpd, MaxShards, int(BN254.MODBYTES+1))
+	ProcessFile(ledger.ShardsFile, ledger.ShardsFile, shardUpd, MaxShards, int(2*curve.MODBYTES+1))
 	//process encapsulated key file cuncurrently
 	//compute file size to determine concurrency
 	fi, err := os.Stat(ledger.KeysFile)
@@ -252,11 +252,11 @@ func (ledger Ledger) Update(s *BN254.BIG) *BN254.BIG {
 		return nil
 	}
 	//compute number of keys
-	sizeKey := int(2*BN254.MODBYTES + 1)
+	sizeKey := int(curve.MODBYTES + 1)
 	numKey := int(fi.Size()) / sizeKey
 	updKey := func(inp shard) shard {
 		//import old key
-		old := BN254.ECP2_fromBytes([]byte(inp.value))
+		old := curve.ECP_fromBytes([]byte(inp.value))
 		//update key
 		new := FracMult(old, sNew, s)
 		//encode key
