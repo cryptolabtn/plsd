@@ -54,7 +54,7 @@ func main() {
 	fmt.Println("Encrypting file", path)
 	startTime = time.Now()
 	index := u.AddBlock(ledger, token, path)
-	fmt.Println("Bolck added with index", index)
+	fmt.Println("Block added with index", index)
 	fmt.Println("Completed in", time.Now().Sub(startTime).Seconds(), "s")
 	//unlock key from the ledger
 	unlocked := u.UnlockKey(ledger.GetEncKey(index))
